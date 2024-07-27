@@ -1,0 +1,112 @@
+const express = require('express');
+const app = express();
+const cors = require('cors');
+require('dotenv').config();
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
+app.use(express.static('public'));
+
+let id = 1;
+const users = [];
+const exercises = [];
+
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/views/index.html');
+});
+
+app.post('/api/users/', (req, res) => {
+  const username = req.body.username;
+  if (username) {
+    const user_id = id;
+    const user = {
+      username: username,
+      _id: user_id.toString() // Ensure _id is a string
+    };
+    users.push(user);
+    res.json(user); // Respond with User object
+    id += 1;
+  } else {
+    res.json({ "error": "invalid username" });
+  }
+});
+
+app.get('/api/users', (req, res) => {
+  // Return array of User objects
+  const userSummaries = users.map(user => ({
+    username: user.username,
+    _id: user._id
+  }));
+  res.json(userSummaries);
+});
+
+app.post('/api/users/:id/exercises', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const user = users.find(u => u._id === userId.toString());
+  if (!user) {
+    return res.json({ "error": "user not found" });
+  }
+
+  const { description, duration, date } = req.body;
+  const exerciseDate = date ? new Date(date) : new Date();
+
+  if (!description || !duration || isNaN(duration)) {
+    return res.json({ "error": "invalid input" });
+  }
+
+  const exercise = {
+    username: user.username,
+    description: description,
+    duration: parseInt(duration, 10),
+    date: exerciseDate.toDateString(),
+    _id: user._id
+  };
+
+  exercises.push(exercise);
+
+  res.json(exercise); // Respond with Exercise object
+});
+
+app.get('/api/users/:id/logs', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const user = users.find(u => u._id === userId.toString());
+  if (!user) {
+    return res.json({ "error": "user not found" });
+  }
+
+  let { from, to, limit } = req.query;
+  let logs = exercises.filter(e => e._id === user._id);
+
+  if (from) {
+    from = new Date(from);
+    logs = logs.filter(e => new Date(e.date) >= from);
+  }
+
+  if (to) {
+    to = new Date(to);
+    logs = logs.filter(e => new Date(e.date) <= to);
+  }
+
+  if (limit) {
+    limit = parseInt(limit, 10);
+    logs = logs.slice(0, limit);
+  }
+
+  const response = {
+    username: user.username,
+    count: logs.length,
+    _id: user._id,
+    log: logs.map(({ description, duration, date }) => ({
+      description: description,
+      duration: duration,
+      date: date
+    }))
+  };
+
+  res.json(response); // Respond with Log object
+});
+
+const listener = app.listen(process.env.PORT || 3000, () => {
+  console.log('Your app is listening on port ' + listener.address().port);
+});
